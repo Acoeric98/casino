@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+   <head>
+      <meta charset="UTF-8">
+      <title>Blackjack</title>
+      <style>
+         body {
+         background-color: #0b3d0b;
+         margin: 0;
+         font-family: Arial, sans-serif;
+         color: #fff;
+         }
+         .container {
+         display: grid;
+         grid-template-columns: 1fr 2fr 1fr;
+         gap: 20px;
+         max-width: 1400px;
+         margin: auto;
+         padding: 20px;
+         }
+         .left-panel, .right-panel {
+         background: #143d14;
+         border-radius: 10px;
+         padding: 15px;
+         min-height: 600px;
+         }
+         .game-panel {
+         background: #0e500e;
+         border-radius: 10px;
+         padding: 20px;
+         color: #fff;
+         min-height: 600px;
+         }
+         h1, h2, h3 {
+         color: #ffcc00;
+         text-align: center;
+         }
+         .value-list {
+         background: #143d14;
+         border: 1px solid #fff;
+         padding: 10px;
+         border-radius: 8px;
+         font-size: 14px;
+         }
+         .value-list h3 {
+         color: #ffcc00;
+         margin-top: 0;
+         }
+         .guide-card {
+         color: red;
+         padding: 3px 0;
+         font-size: 16px;
+         font-weight: bold;
+         }
+         .card {
+         width: 60px;
+         height: 90px;
+         border: 2px solid #fff;
+         border-radius: 8px;
+         background-color: #fff;
+         color: #000;
+         font-size: 24px;
+         font-weight: bold;
+         display: flex;
+         flex-direction: column;
+         justify-content: space-between;
+         padding: 5px;
+         box-shadow: 2px 2px 10px #000;
+         }
+         .card.red { color: red; }
+         .card .corner { font-size: 16px; }
+         .cards {
+         display: flex;
+         justify-content: center;
+         gap: 10px;
+         margin: 15px 0;
+         }
+         button {
+         padding: 10px 20px;
+         margin: 5px;
+         background: #333;
+         color: #fff;
+         border: none;
+         cursor: pointer;
+         }
+         button:hover { background: #555; }
+         .card.back {
+         background: repeating-linear-gradient(45deg, #333, #333 5px, #555 5px, #555 10px);
+         color: transparent;
+         }
+      </style>
+   </head>
+   <body>
+      <div class="container">
+         <div class="left-panel">
+            <h3>Top Winners</h3>
+            <p>Coming soon...</p>
+            <button onclick="logout()">Kijelentkezés</button>
+            <p>Egyenleg: <span id="balance">...</span> coins</p>
+         </div>
+         <div class="game-panel">
+            <h1>Blackjack</h1>
+            <div>
+               <h2>Dealer</h2>
+               <div id="dealer-cards" class="cards"></div>
+               <div id="dealer-score">Dealer is waiting...</div>
+            </div>
+            <div>
+               <h2>Player</h2>
+               <div id="player-cards" class="cards"></div>
+               <div id="player-score"></div>
+            </div>
+            <button id="hit-btn" onclick="hit()">HIT</button>
+            <button id="stand-btn" onclick="stand()">STAND</button>
+            <button onclick="restart()">RESTART</button>
+            <h2 id="result"></h2>
+         </div>
+         <div class="right-panel">
+            <div id="card-guide" class="value-list">
+               <h3>Card Values ♥</h3>
+               <div class="guide-card">A ♥ = 1 or 11</div>
+               <div class="guide-card">2 ♥ = 2</div>
+               <div class="guide-card">3 ♥ = 3</div>
+               <div class="guide-card">4 ♥ = 4</div>
+               <div class="guide-card">5 ♥ = 5</div>
+               <div class="guide-card">6 ♥ = 6</div>
+               <div class="guide-card">7 ♥ = 7</div>
+               <div class="guide-card">8 ♥ = 8</div>
+               <div class="guide-card">9 ♥ = 9</div>
+               <div class="guide-card">10 ♥ = 10</div>
+               <div class="guide-card">J ♥ = 10</div>
+               <div class="guide-card">Q ♥ = 10</div>
+               <div class="guide-card">K ♥ = 10</div>
+            </div>
+         </div>
+      </div>
+      <script>
+         async function logout() {
+           await fetch("../auth/logout.php");
+           window.location.href = "../login.html";
+         }
+
+         async function loadBalance() {
+           const res = await fetch("../api/get_balance.php");
+           const balance = await res.text();
+           document.getElementById("balance").textContent = balance;
+         }
+
+         async function updateBalance(delta) {
+           await fetch("../api/update_balance.php", {
+             method: "POST",
+             headers: { "Content-Type": "application/json" },
+             body: JSON.stringify({ delta })
+           });
+           loadBalance();
+         }
+
+         function renderDealer(showAll = false) {
+           let html = '';
+           dealerHand.forEach((card, index) => {
+             if (!showAll && index === 1) {
+               html += `<div class="card back">🂠</div>`;
+             } else {
+               const isRed = (card.suit === 'hearts' || card.suit === 'diamonds') ? 'red' : '';
+               const suitSymbol = {'spades':'♠','hearts':'♥','diamonds':'♦','clubs':'♣'}[card.suit];
+               html += `
+                 <div class="card ${isRed}">
+                   <div class="corner">${card.value}${suitSymbol}</div>
+                   <div style="text-align:center; font-size:32px;">${suitSymbol}</div>
+                   <div class="corner" style="transform: rotate(180deg);">${card.value}${suitSymbol}</div>
+                 </div>`;
+             }
+           });
+           document.getElementById('dealer-cards').innerHTML = html;
+         }
+
+         let deck, playerHand, dealerHand, gameOver = false;
+         const suits = ['spades', 'hearts', 'diamonds', 'clubs'];
+         const values = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+
+         function createDeck() {
+           let d = [];
+           for (let suit of suits) {
+             for (let value of values) {
+               d.push({ suit, value });
+             }
+           }
+           return d.sort(() => Math.random() - 0.5);
+         }
+
+         function calcScore(hand) {
+           let score = 0, aces = 0;
+           for (let card of hand) {
+             if (['J', 'Q', 'K'].includes(card.value)) score += 10;
+             else if (card.value === 'A') { score += 11; aces++; }
+             else score += parseInt(card.value);
+           }
+           while (score > 21 && aces) { score -= 10; aces--; }
+           return score;
+         }
+
+         function render() {
+           renderHand(playerHand, 'player-cards');
+           renderDealer(gameOver);
+           document.getElementById('player-score').textContent = 'Score: ' + calcScore(playerHand);
+           document.getElementById('dealer-score').textContent = gameOver ? 'Score: ' + calcScore(dealerHand) : 'Dealer is waiting...';
+         }
+
+         function renderHand(hand, elementId) {
+           let html = '';
+           for (let card of hand) {
+             const isRed = (card.suit === 'hearts' || card.suit === 'diamonds') ? 'red' : '';
+             const suitSymbol = { spades: '♠', hearts: '♥', diamonds: '♦', clubs: '♣' }[card.suit];
+             html += `<div class="card ${isRed}">
+               <div class="corner">${card.value}${suitSymbol}</div>
+               <div style="text-align:center; font-size:32px;">${suitSymbol}</div>
+               <div class="corner" style="transform: rotate(180deg);">${card.value}${suitSymbol}</div>
+             </div>`;
+           }
+           document.getElementById(elementId).innerHTML = html;
+         }
+
+         function hit() {
+           if (gameOver) return;
+           playerHand.push(deck.pop());
+           render();
+           if (calcScore(playerHand) > 21) endGame();
+         }
+
+         function stand() {
+           if (gameOver) return;
+           while (calcScore(dealerHand) < 17) {
+             dealerHand.push(deck.pop());
+           }
+           endGame();
+           render();
+         }
+
+         function endGame() {
+           gameOver = true;
+           let playerScore = calcScore(playerHand);
+           let dealerScore = calcScore(dealerHand);
+           let result = '';
+
+           if (playerScore > 21) { result = 'Player busts! Dealer wins!'; updateBalance(-10); }
+           else if (dealerScore > 21) { result = 'Dealer busts! Player wins!'; updateBalance(20); }
+           else if (playerScore > dealerScore) { result = 'Player wins!'; updateBalance(10); }
+           else if (dealerScore > playerScore) { result = 'Dealer wins!'; updateBalance(-10); }
+           else { result = 'Push (Draw)!'; }
+
+           document.getElementById('result').textContent = result;
+           disableActions();
+           render();
+         }
+
+         function restart() {
+           deck = createDeck();
+           playerHand = [deck.pop(), deck.pop()];
+           dealerHand = [deck.pop(), deck.pop()];
+           document.getElementById('result').textContent = '';
+           gameOver = false;
+           enableActions();
+           render();
+         }
+
+         function disableActions() {
+           document.getElementById('hit-btn').disabled = true;
+           document.getElementById('stand-btn').disabled = true;
+         }
+
+         function enableActions() {
+           document.getElementById('hit-btn').disabled = false;
+           document.getElementById('stand-btn').disabled = false;
+         }
+
+         restart();
+         loadBalance();
+      </script>
+   </body>
+</html>

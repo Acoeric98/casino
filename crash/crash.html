@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <title>Crash Piacok</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      background-color: #0c0c0c;
+      color: white;
+      font-family: 'Segoe UI', sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
+    .chart-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+    .chart-box {
+      background-color: #1e1e1e;
+      border-radius: 12px;
+      padding: 15px;
+      box-shadow: 0 0 10px rgba(255,255,255,0.1);
+    }
+    canvas {
+      background: #181818;
+      border-radius: 8px;
+    }
+    .controls {
+      margin-top: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .controls button {
+      background-color: #3498db;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .controls button:hover {
+      background-color: #2980b9;
+    }
+    .multiplier {
+      font-weight: bold;
+      font-size: 18px;
+      color: #f1c40f;
+    }
+    #balance {
+      font-size: 20px;
+      margin-bottom: 20px;
+    }
+    .indicator {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: gray;
+      margin-left: 10px;
+    }
+    .indicator.active {
+      background: limegreen;
+    }
+    .status {
+      font-size: 14px;
+      margin-top: 6px;
+      color: #ccc;
+    }
+  </style>
+</head>
+<body>
+  <h1>📈 Crash Piacok</h1>
+  <div id="balance">Egyenleg: ... coins</div>
+  <div class="chart-grid" id="chartGrid"></div>
+
+  <script>
+    const chartCount = 6;
+    const chartData = [];
+    const chartInstances = [];
+    const activeTrades = {};
+
+    async function loadBalance() {
+      const res = await fetch("/casino/api/get_balance.php")
+      const text = await res.text();
+      document.getElementById("balance").textContent = `Egyenleg: ${text} coins`;
+    }
+
+    function createChartBox(index) {
+      const box = document.createElement('div');
+      box.className = 'chart-box';
+      box.innerHTML = `
+        <h3>Piac #${index}</h3>
+        <canvas id="chart${index}" height="150"></canvas>
+        <div class="controls">
+          <span class="multiplier" id="mult${index}">Érték: ...</span>
+          <input id="amount${index}" type="number" min="1" value="100" style="width:70px; margin-left:10px;" />
+          <span id="indicator${index}" style="font-size: 18px; margin-left: 10px;">🔘</span>
+          <button onclick="buy(${index})">Beszállok</button>
+          <button onclick="sell(${index})">Kiszállok</button>
+        </div>
+        <div class="status" id="status${index}">Nem vagy bent ezen a piacon.</div>
+      `;
+      return box;
+    }
+
+    function setupCharts() {
+      const grid = document.getElementById('chartGrid');
+      for (let i = 1; i <= chartCount; i++) {
+        const box = createChartBox(i);
+        grid.appendChild(box);
+        const ctx = document.getElementById(`chart${i}`).getContext('2d');
+        const data = {
+          labels: Array(100).fill(''),
+          datasets: [{
+            label: `Chart ${i}`,
+            data: Array(100).fill(10),
+            fill: true,
+            borderColor: 'lime',
+            backgroundColor: 'rgba(0,255,0,0.2)',
+            tension: 0.25
+          }]
+        };
+        const chart = new Chart(ctx, {
+          type: 'line',
+          data: data,
+          options: {
+            animation: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              y: { beginAtZero: true, ticks: { color: 'white' } },
+              x: { ticks: { color: 'white' } }
+            }
+          }
+        });
+        chartData[i] = data;
+        chartInstances[i] = chart;
+      }
+    }
+
+    async function fetchChart(i) {
+      const res = await fetch(`/casino/chart-api/chart${i}`);
+      const values = await res.json();
+      if (chartData[i]) {
+        chartData[i].datasets[0].data = values;
+        chartInstances[i].update();
+        document.getElementById(`mult${i}`).textContent = `Érték: ${values.at(-1)}`;
+      }
+    }
+
+    async function buy(i) {
+      if (activeTrades[i]) return alert("Már bent vagy ezen a piacon.");
+      const multiplier = chartData[i].datasets[0].data.at(-1);
+      const amount = parseInt(document.getElementById(`amount${i}`).value);
+
+      if (!amount || amount <= 0) return alert("Adj meg érvényes összeget!");
+
+      await fetch("/casino/api/update_balance.php", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ delta: -amount })
+      });
+
+      activeTrades[i] = { startMultiplier: multiplier, stake: amount };
+      alert(`✅ Beszálltál a ${i}. piacon: ${multiplier}x-nél, ${amount} coin értékben`);
+      document.getElementById(`indicator${i}`).textContent = '🟢';
+      document.getElementById(`status${i}`).textContent = `Piac#${i} – Beszállva: ${multiplier}-nél ennyivel: ${amount} coin`;
+      loadBalance();
+    }
+
+    async function sell(i) {
+      if (!activeTrades[i]) return alert("Nem vagy bent ezen a piacon.");
+
+      const endMult = chartData[i].datasets[0].data.at(-1);
+      const { startMultiplier, stake } = activeTrades[i];
+      const win = Math.round(stake * (endMult / startMultiplier));
+      delete activeTrades[i];
+
+      await fetch("/casino/api/update_balance.php", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ delta: win })
+      });
+
+      alert(`💰 Kiszálltál a ${i}. piacon ${endMult}x-nél, nyeremény: ${win} coins`);
+      document.getElementById(`indicator${i}`).textContent = '🔘';
+      document.getElementById(`status${i}`).textContent = "Nem vagy bent ezen a piacon.";
+      loadBalance();
+    }
+
+    setupCharts();
+    setInterval(() => { for (let i = 1; i <= chartCount; i++) fetchChart(i); }, 500);
+    loadBalance();
+  </script>
+</body>
+</html>

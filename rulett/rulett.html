@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Roulette</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>Roulette Game</h1>
+  <button onclick="logout()">Kijelentkezés</button>
+  <h2>Pénztárca: <span id="balance">...</span> coins</h2>
+  <div class="roulette-container">
+    <div class="wheel" id="wheel"></div>
+    <div class="ball" id="ball"></div>
+    <div class="pointer" id="pointer"></div>
+  </div>
+  <div class="betting-panel">
+    <label for="bet-type">Fogadás típusa:</label>
+    <select id="bet-type" onchange="toggleBetNumberInput()">
+        <option value="null">null</option>
+        <option value="straight">Egyenes tét (1 szám)</option>
+        <option value="voisins">Voisins du Zéro (Zéró szomszédai)</option>
+        <option value="tiers">Tiers du Cylindre (Harmadok)</option>
+        <option value="orphans">Orphelins (Árvák)</option>
+        <option value="zero-game">Jeu Zéro (Zéró játék)</option>
+        <option value="first-dozen">1. Tucat</option>
+        <option value="second-dozen">2. Tucat</option>
+        <option value="third-dozen">3. Tucat</option>
+        <option value="first-column">1. Oszlop</option>
+        <option value="second-column">2. Oszlop</option>
+        <option value="third-column">3. Oszlop</option>
+        <option value="red">Piros</option>
+        <option value="black">Fekete</option>
+        <option value="even">Páros</option>
+        <option value="odd">Páratlan</option>
+        <option value="low">Alacsony (1-18)</option>
+        <option value="high">Magas (19-36)</option>
+      </select>
+    <input type="number" id="bet-amount" placeholder="Coin mennyisége" min="1">
+    <input type="number" id="bet-number" placeholder="Szám" min="0" max="36" style="display:none;">
+    <button class="spin-button" onclick="placeBet()">Tét megadása</button>
+  </div>
+  <button class="spin-button" onclick="spinWheel()">Pörgetés</button>
+  <p id="result">Nyertes szám: </p>
+  <script src="rulett_script.js"></script>
+  <script>
+    // Egyenleg betöltése
+    async function loadBalance() {
+      const res = await fetch("../api/get_balance.php");
+      const balance = await res.text();
+      document.getElementById("balance").textContent = balance;
+    }
+
+    async function logout() {
+      await fetch("../auth/logout.php");
+      window.location.href = "../login.html";
+    }
+
+    loadBalance();
+  </script>
+</body>
+</html>

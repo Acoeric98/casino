@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <title>Kaszinó – Főoldal</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #111;
+            color: #fff;
+            text-align: center;
+            padding-top: 50px;
+        }
+        h1 {
+            color: #ffcc00;
+        }
+        .game-link, .auth-link {
+            display: block;
+            margin: 20px auto;
+            padding: 15px 30px;
+            font-size: 20px;
+            background-color: #222;
+            border: 2px solid #ffcc00;
+            border-radius: 10px;
+            width: 300px;
+            text-decoration: none;
+            color: white;
+        }
+        .game-link:hover, .auth-link:hover {
+            background-color: #444;
+        }
+        .top-bar {
+            position: absolute;
+            top: 10px;
+            right: 20px;
+            text-align: right;
+        }
+        .logout-btn {
+            background: #e74c3c;
+            border: none;
+            padding: 8px 12px;
+            color: white;
+            cursor: pointer;
+            border-radius: 4px;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="auth-section" style="display:none;">
+        <h1>🎰 Üdvözöl a Kaszinó!</h1>
+        <p>Kérlek, jelentkezz be vagy regisztrálj az induláshoz:</p>
+        <a class="auth-link" href="login.html">🔐 Bejelentkezés</a>
+        <a class="auth-link" href="register.html">📝 Regisztráció</a>
+    </div>
+
+    <div id="game-section" style="display:none;">
+        <div class="top-bar">
+            <div>Egyenleg: <span id="balance">...</span> coins</div>
+            <button class="logout-btn" onclick="logout()">Kijelentkezés</button>
+        </div>
+
+<h1>🎰 Online Kaszinó</h1>
+<a class="game-link" href="blackjack/blackjack.html">♠ Blackjack</a>
+<a class="game-link" href="felkaru_rablo/rablo.html">🎰 5x5 Slot Machine</a>
+<a class="game-link" href="rulett/rulett.html">🎡 Rulett</a>
+<a class="game-link" href="poker/poker.html">🃏 Texas Hold’em Poker</a> 
+<a class="game-link" href="crash/crash.html">📈 Tősde</a></div>
+    <script>
+        async function checkSession() {
+            try {
+                const res = await fetch("api/get_balance.php");
+                const balance = await res.text();
+
+                if (balance.includes("Not logged in") || balance.includes("hiba")) {
+                    throw new Error("Not logged in");
+                }
+
+                document.getElementById("balance").textContent = balance;
+                document.getElementById("game-section").style.display = "block";
+            } catch (err) {
+                document.getElementById("auth-section").style.display = "block";
+            }
+        }
+
+        async function logout() {
+            await fetch("auth/logout.php");
+            location.reload();
+        }
+
+        checkSession();
+    </script>
+</body>
+</html>
